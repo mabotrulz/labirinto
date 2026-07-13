@@ -343,31 +343,39 @@ canvas.addEventListener('touchend', function(e) {
 // Tilt
 let tiltX = 0, tiltY = 0;
 let tiltInterval = null;
+let tiltBaseX = 0, tiltBaseY = 0;
+let tiltCalibrated = false;
 
 function startTilt() {
   if (!_gameStarted) return;
   if (window.DeviceOrientationEvent) {
-    // Lock portrait to prevent screen rotation
     try { screen.orientation.lock('portrait'); } catch(e) {}
     window.addEventListener('deviceorientation', handleTilt);
     tiltEnabled = true;
-    tiltInterval = setInterval(checkTilt, 250);
+    tiltCalibrated = false;
+    tiltInterval = setInterval(checkTilt, 200);
   }
 }
 
 function handleTilt(e) {
+  if (!tiltCalibrated && e.gamma !== null && e.beta !== null) {
+    tiltBaseX = e.gamma || 0;
+    tiltBaseY = e.beta || 90;
+    tiltCalibrated = true;
+  }
   tiltX = e.gamma || 0;
-  tiltY = e.beta || 0;
+  tiltY = e.beta || 90;
 }
 
 function checkTilt() {
-  if (!_gameStarted || isMoving) return;
-  // gamma: left(-)/right(+) tilt
-  if (tiltX > 12) moveBall(1, 0);
-  else if (tiltX < -12) moveBall(-1, 0);
-  // beta: when held flat, beta~90. forward(away)=beta<80, back(toward)=beta>100
-  if (tiltY > 105) moveBall(0, 1);    // tilt toward you = down
-  else if (tiltY < 75) moveBall(0, -1); // tilt away = up
+  if (!_gameStarted || isMoving || !tiltCalibrated) return;
+  var dx = tiltX - tiltBaseX;
+  var dy = tiltY - tiltBaseY;
+  var thr = 10;
+  if (Math.abs(dx) > Math.abs(dy) && dx > thr) moveBall(1, 0);
+  else if (Math.abs(dx) > Math.abs(dy) && dx < -thr) moveBall(-1, 0);
+  else if (dy > thr) moveBall(0, 1);
+  else if (dy < -thr) moveBall(0, -1);
 }
 
 // ========== START GAME ==========
