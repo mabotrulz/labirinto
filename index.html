@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Labirinto — Maze Game</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100dvh;overflow:hidden;user-select:none;touch-action:none}
+.game{width:100vw;height:100dvh;max-width:600px;background:linear-gradient(180deg,#2d4a3e,#3a5a4a);display:flex;flex-direction:column;position:relative;overflow:hidden}
+
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.2);flex-shrink:0}
+.header .title{color:#f1c40f;font-weight:bold;font-size:clamp(14px,4vw,20px)}
+.header .info{color:#fff;font-size:clamp(12px,3.5vw,16px)}
+.header .star{color:#f1c40f}
+
+.maze-area{flex:1;display:flex;justify-content:center;align-items:center;padding:8px;position:relative}
+canvas{display:block;border-radius:8px;background:#3d6b3d;box-shadow:0 4px 20px rgba(0,0,0,0.3);touch-action:none}
+
+.controls{display:flex;justify-content:center;gap:8px;padding:8px;flex-shrink:0}
+.dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:min(200px,50vw)}
+.dpad-btn{width:100%;aspect-ratio:1;border:none;border-radius:8px;font-size:clamp(18px,5vw,28px);cursor:pointer;background:rgba(255,255,255,0.15);color:#fff;display:flex;align-items:center;justify-content:center;transition:background 0.1s}
+.dpad-btn:active{background:rgba(255,255,255,0.3)}
+.dpad-btn.blank{visibility:hidden}
+
+.start-overlay,.win-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50;padding:20px;text-align:center;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.start-overlay.active,.win-overlay.active{opacity:1;pointer-events:auto}
+.start-overlay .logo{font-size:clamp(48px,15vw,80px);margin-bottom:10px}
+.start-overlay h1{color:#f1c40f;font-size:clamp(24px,7vw,40px);margin-bottom:8px}
+.start-overlay p{color:#ccc;font-size:clamp(12px,3.5vw,16px);max-width:280px;margin-bottom:20px;line-height:1.4}
+.start-btn{background:#f1c40f;color:#1a1a2e;border:none;padding:12px 40px;border-radius:30px;font-size:clamp(16px,4.5vw,22px);font-weight:bold;cursor:pointer}
+.start-btn:active{transform:scale(0.95)}
+
+.win-overlay h2{color:#f1c40f;font-size:clamp(20px,6vw,32px);margin-bottom:8px}
+.win-overlay .sub{color:#ccc;font-size:clamp(14px,4vw,20px);margin-bottom:16px}
+.win-btn{background:#f1c40f;color:#1a1a2e;border:none;padding:10px 30px;border-radius:30px;font-size:clamp(14px,4vw,20px);font-weight:bold;cursor:pointer;margin:4px}
+.win-btn:active{transform:scale(0.95)}
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <div class="header">
+    <div class="title">🌀 Labirinto</div>
+    <div class="info">Nível <span id="levelDisplay">1</span> · <span class="star" id="scoreDisplay">0 ⭐</span></div>
+  </div>
+  
+  <div class="maze-area">
+    <canvas id="mazeCanvas"></canvas>
+  </div>
+  
+  <div class="controls">
+    <div class="dpad">
+      <div class="dpad-btn blank"></div>
+      <button class="dpad-btn" id="btnUp">↑</button>
+      <div class="dpad-btn blank"></div>
+      <button class="dpad-btn" id="btnLeft">←</button>
+      <button class="dpad-btn" id="btnDown">↓</button>
+      <button class="dpad-btn" id="btnRight">→</button>
+    </div>
+  </div>
+  
+  <div class="start-overlay active" id="startOverlay">
+    <div class="logo">🌀</div>
+    <h1>Labirinto</h1>
+    <p>Rola a bola até à estrela ★ Inclina o telemóvel ou usa as setas!</p>
+    <button class="start-btn" id="startBtn">▶ COMEÇAR</button>
+  </div>
+  
+  <div class="win-overlay" id="winOverlay">
+    <h2 id="winTitle">🏆 Vitória!</h2>
+    <div class="sub" id="winSub">Chegaste à estrela!</div>
+    <button class="win-btn" onclick="nextLevel()">Próximo nível →</button>
+  </div>
+</div>
+
+<script>
+// ========== CONSTANTS ==========
+let _gameStarted = false;
+let level = 1;
+let score = 0;
+let maze = [];
+let ball = {x:0, y:0};
+let exit = {x:0, y:0};
+let cellSize = 60;
+let mazeRows = 3;
+let mazeCols = 3;
+let isMoving = false;
+let moveTimeout = null;
+let tiltEnabled = false;
+
+const canvas = document.getElementById('mazeCanvas');
+const ctx = canvas.getContext('2d');
+
+// ========== MAZE GENERATION ==========
+function generateMaze(rows, cols) {
+  // Initialize grid with all walls
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    grid[r] = [];
+    for (let c = 0; c < cols; c++) {
+      grid[r][c] = {n:true, s:true, e:true, w:true, visited:false};
+    }
+  }
+  
+  // Recursive backtracker
+  function carve(r, c) {
+    grid[r][c].visited = true;
+    const dirs = [];
+    if (r > 0) dirs.push([-1,0,'n','s']);
+    if (r < rows-1) dirs.push([1,0,'s','n']);
+    if (c > 0) dirs.push([0,-1,'w','e']);
+    if (c < cols-1) dirs.push([0,1,'e','w']);
+    
+    // Shuffle
+    for (let i = dirs.length-1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+    }
+    
+    for (const [dr, dc, wall, wall2] of dirs) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (!grid[nr][nc].visited) {
+        grid[r][c][wall] = false;
+        grid[nr][nc][wall2] = false;
+        carve(nr, nc);
+      }
+    }
+  }
+  
+  carve(0, 0);
+  return grid;
+}
+
+// ========== RENDER ==========
+function render() {
+  const area = document.querySelector('.maze-area');
+  const maxW = area.clientWidth - 16;
+  const maxH = area.clientHeight - 16;
+  const sizeByW = Math.floor(maxW / mazeCols);
+  const sizeByH = Math.floor(maxH / mazeRows);
+  cellSize = Math.min(sizeByW, sizeByH, 80);
+  
+  canvas.width = mazeCols * cellSize;
+  canvas.height = mazeRows * cellSize;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#3d6b3d';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw maze
+  ctx.strokeStyle = '#2a4a2a';
+  ctx.lineWidth = Math.max(2, cellSize * 0.06);
+  ctx.lineCap = 'round';
+  
+  for (let r = 0; r < mazeRows; r++) {
+    for (let c = 0; c < mazeCols; c++) {
+      const x = c * cellSize;
+      const y = r * cellSize;
+      const cell = maze[r][c];
+      
+      // Floor
+      ctx.fillStyle = (r === ball.y && c === ball.x) ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+      ctx.fillRect(x+2, y+2, cellSize-4, cellSize-4);
+      
+      // Walls
+      ctx.beginPath();
+      ctx.strokeStyle = '#2a4a2a';
+      if (cell.n) { ctx.moveTo(x, y); ctx.lineTo(x+cellSize, y); }
+      if (cell.s) { ctx.moveTo(x, y+cellSize); ctx.lineTo(x+cellSize, y+cellSize); }
+      if (cell.w) { ctx.moveTo(x, y); ctx.lineTo(x, y+cellSize); }
+      if (cell.e) { ctx.moveTo(x+cellSize, y); ctx.lineTo(x+cellSize, y+cellSize); }
+      ctx.stroke();
+    }
+  }
+  
+  // Draw exit (star)
+  const ex = exit.x * cellSize;
+  const ey = exit.y * cellSize;
+  const es = cellSize * 0.4;
+  ctx.fillStyle = '#f1c40f';
+  drawStar(ctx, ex + cellSize/2, ey + cellSize/2, es/2, 5);
+  
+  // Draw ball
+  const bx = ball.x * cellSize + cellSize/2;
+  const by = ball.y * cellSize + cellSize/2;
+  const br = cellSize * 0.3;
+  
+  // Shadow
+  ctx.beginPath();
+  ctx.arc(bx+2, by+2, br, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fill();
+  
+  // Ball
+  const grad = ctx.createRadialGradient(bx-br*0.3, by-br*0.3, br*0.1, bx, by, br);
+  grad.addColorStop(0, '#f1c40f');
+  grad.addColorStop(1, '#c9a00e');
+  ctx.beginPath();
+  ctx.arc(bx, by, br, 0, Math.PI*2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.strokeStyle = '#a08000';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawStar(ctx, cx, cy, r, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points*2; i++) {
+    const angle = (i * Math.PI / points) - Math.PI/2;
+    const rad = i % 2 === 0 ? r : r*0.45;
+    const x = cx + Math.cos(angle) * rad;
+    const y = cy + Math.sin(angle) * rad;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ========== MOVEMENT ==========
+function moveBall(dx, dy) {
+  if (isMoving) return;
+  
+  const nx = ball.x + dx;
+  const ny = ball.y + dy;
+  
+  // Check if within bounds
+  if (nx < 0 || nx >= mazeCols || ny < 0 || ny >= mazeRows) return;
+  
+  // Check wall
+  const cell = maze[ball.y][ball.x];
+  if (dx === 1 && cell.e) return;
+  if (dx === -1 && cell.w) return;
+  if (dy === 1 && cell.s) return;
+  if (dy === -1 && cell.n) return;
+  
+  isMoving = true;
+  ball.x = nx;
+  ball.y = ny;
+  
+  try { new Audio('assets/walk_oh.ogg').play(); } catch(e) {}
+  
+  render();
+  
+  // Check win
+  if (ball.x === exit.x && ball.y === exit.y) {
+    setTimeout(win, 300);
+  }
+  
+  setTimeout(() => { isMoving = false; }, 100);
+}
+
+// ========== BUILD LEVEL ==========
+function buildLevel() {
+  mazeRows = Math.min(3 + Math.floor((level-1) / 2), 6);
+  mazeCols = mazeRows;
+  
+  maze = generateMaze(mazeRows, mazeCols);
+  ball = {x: 0, y: 0};
+  exit = {x: mazeCols-1, y: mazeRows-1};
+  
+  render();
+  document.getElementById('levelDisplay').textContent = level;
+}
+
+// ========== WIN ==========
+function win() {
+  score++;
+  document.getElementById('scoreDisplay').textContent = score + ' ⭐';
+  try { new Audio('assets/correct_yes.ogg').play(); } catch(e) {}
+  
+  const ov = document.getElementById('winOverlay');
+  document.getElementById('winTitle').textContent = '🏆 Vitória!';
+  document.getElementById('winSub').textContent = 'Chegaste à estrela! ⭐';
+  ov.classList.add('active');
+  speak('Boa! Chegaste à estrela!');
+}
+
+function nextLevel() {
+  document.getElementById('winOverlay').classList.remove('active');
+  level++;
+  buildLevel();
+  speak('Nível ' + level);
+}
+
+// ========== SPEECH ==========
+function speak(text) {
+  if (!_gameStarted) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'pt-PT';
+    u.rate = 0.9;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
+
+// ========== CONTROLS ==========
+// Keyboard
+document.addEventListener('keydown', function(e) {
+  if (!_gameStarted) return;
+  switch(e.key) {
+    case 'ArrowUp': e.preventDefault(); moveBall(0, -1); break;
+    case 'ArrowDown': e.preventDefault(); moveBall(0, 1); break;
+    case 'ArrowLeft': e.preventDefault(); moveBall(-1, 0); break;
+    case 'ArrowRight': e.preventDefault(); moveBall(1, 0); break;
+  }
+});
+
+// D-pad buttons
+document.getElementById('btnUp').addEventListener('click', function() { if(_gameStarted) moveBall(0,-1); });
+document.getElementById('btnDown').addEventListener('click', function() { if(_gameStarted) moveBall(0,1); });
+document.getElementById('btnLeft').addEventListener('click', function() { if(_gameStarted) moveBall(-1,0); });
+document.getElementById('btnRight').addEventListener('click', function() { if(_gameStarted) moveBall(1,0); });
+
+// Swipe
+let touchStart = null;
+canvas.addEventListener('touchstart', function(e) {
+  if (!_gameStarted) return;
+  const t = e.touches[0];
+  touchStart = {x: t.clientX, y: t.clientY};
+}, {passive: true});
+
+canvas.addEventListener('touchend', function(e) {
+  if (!_gameStarted || !touchStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStart.x;
+  const dy = t.clientY - touchStart.y;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  
+  if (Math.max(absDx, absDy) < 20) return;
+  
+  if (absDx > absDy) {
+    moveBall(dx > 0 ? 1 : -1, 0);
+  } else {
+    moveBall(0, dy > 0 ? 1 : -1);
+  }
+  touchStart = null;
+}, {passive: true});
+
+// Tilt
+let tiltX = 0, tiltY = 0;
+let tiltInterval = null;
+
+function startTilt() {
+  if (!_gameStarted) return;
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener('deviceorientation', handleTilt);
+    tiltEnabled = true;
+    tiltInterval = setInterval(checkTilt, 300);
+  }
+}
+
+function handleTilt(e) {
+  // gamma = left/right tilt, beta = front/back tilt
+  tiltX = e.gamma || 0;
+  tiltY = e.beta || 0;
+}
+
+function checkTilt() {
+  if (!_gameStarted || isMoving) return;
+  const threshold = 15;
+  if (tiltX > threshold) moveBall(1, 0);
+  else if (tiltX < -threshold) moveBall(-1, 0);
+  else if (tiltY > threshold + 45) moveBall(0, 1);
+  else if (tiltY < threshold + 45) moveBall(0, -1);
+}
+
+// ========== START GAME ==========
+function startGame() {
+  document.getElementById('startOverlay').classList.remove('active');
+  _gameStarted = true;
+  level = 1;
+  score = 0;
+  document.getElementById('scoreDisplay').textContent = '0 ⭐';
+  buildLevel();
+  speak('Labirinto!');
+  startTilt();
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+
+// Handle resize
+window.addEventListener('resize', function() {
+  if (_gameStarted) render();
+});
+</script>
+</body>
+</html>
