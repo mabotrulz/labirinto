@@ -347,25 +347,27 @@ let tiltInterval = null;
 function startTilt() {
   if (!_gameStarted) return;
   if (window.DeviceOrientationEvent) {
+    // Lock portrait to prevent screen rotation
+    try { screen.orientation.lock('portrait'); } catch(e) {}
     window.addEventListener('deviceorientation', handleTilt);
     tiltEnabled = true;
-    tiltInterval = setInterval(checkTilt, 300);
+    tiltInterval = setInterval(checkTilt, 250);
   }
 }
 
 function handleTilt(e) {
-  // gamma = left/right tilt, beta = front/back tilt
   tiltX = e.gamma || 0;
   tiltY = e.beta || 0;
 }
 
 function checkTilt() {
   if (!_gameStarted || isMoving) return;
-  const threshold = 15;
-  if (tiltX > threshold) moveBall(1, 0);
-  else if (tiltX < -threshold) moveBall(-1, 0);
-  else if (tiltY > threshold + 45) moveBall(0, 1);
-  else if (tiltY < threshold + 45) moveBall(0, -1);
+  // gamma: left(-)/right(+) tilt
+  if (tiltX > 12) moveBall(1, 0);
+  else if (tiltX < -12) moveBall(-1, 0);
+  // beta: when held flat, beta~90. forward(away)=beta<80, back(toward)=beta>100
+  if (tiltY > 105) moveBall(0, 1);    // tilt toward you = down
+  else if (tiltY < 75) moveBall(0, -1); // tilt away = up
 }
 
 // ========== START GAME ==========
