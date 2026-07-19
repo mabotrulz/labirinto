@@ -6,22 +6,16 @@
 <title>Labirinto — Maze Game</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#1a1a2e;font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100dvh;overflow:hidden;user-select:none;touch-action:none}
-.game{width:100vw;height:100dvh;max-width:600px;background:linear-gradient(180deg,#2d4a3e,#3a5a4a);display:flex;flex-direction:column;position:relative;overflow:hidden}
+body{background:#2d1b4e;font-family:'Baloo 2','Comic Sans MS','Chalkboard SE',system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100dvh;overflow:hidden;user-select:none;touch-action:none}
+.game{width:100vw;height:100dvh;max-width:600px;background:linear-gradient(180deg,#6c5ce7 0%,#a55eea 45%,#fd79a8 100%);display:flex;flex-direction:column;position:relative;overflow:hidden}
 
-.header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(0,0,0,0.2);flex-shrink:0}
-.header .title{color:#f1c40f;font-weight:bold;font-size:clamp(14px,4vw,20px)}
-.header .info{color:#fff;font-size:clamp(12px,3.5vw,16px)}
-.header .star{color:#f1c40f}
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;flex-shrink:0}
+.header .title{color:#ffe259;font-weight:800;font-size:clamp(14px,4vw,20px);text-shadow:0 2px 0 rgba(0,0,0,0.15)}
+.header .info{color:#fff;font-weight:700;font-size:clamp(12px,3.5vw,16px)}
+.header .star{color:#ffe259}
 
 .maze-area{flex:1;display:flex;justify-content:center;align-items:center;padding:8px;position:relative}
-canvas{display:block;border-radius:8px;background:#3d6b3d;box-shadow:0 4px 20px rgba(0,0,0,0.3);touch-action:none}
-
-.controls{display:flex;justify-content:center;gap:8px;padding:8px;flex-shrink:0}
-.dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:min(200px,50vw)}
-.dpad-btn{width:100%;aspect-ratio:1;border:none;border-radius:8px;font-size:clamp(18px,5vw,28px);cursor:pointer;background:rgba(255,255,255,0.15);color:#fff;display:flex;align-items:center;justify-content:center;transition:background 0.1s}
-.dpad-btn:active{background:rgba(255,255,255,0.3)}
-.dpad-btn.blank{visibility:hidden}
+canvas{display:block;border-radius:16px;background:#ede9fe;box-shadow:0 6px 24px rgba(0,0,0,0.25);touch-action:none}
 
 .start-overlay,.win-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:50;padding:20px;text-align:center;opacity:0;pointer-events:none;transition:opacity 0.3s}
 .start-overlay.active,.win-overlay.active{opacity:1;pointer-events:auto}
@@ -65,22 +59,11 @@ canvas{display:block;border-radius:8px;background:#3d6b3d;box-shadow:0 4px 20px 
   <div class="maze-area">
     <canvas id="mazeCanvas"></canvas>
   </div>
-  
-  <div class="controls">
-    <div class="dpad">
-      <div class="dpad-btn blank"></div>
-      <button class="dpad-btn" id="btnUp">↑</button>
-      <div class="dpad-btn blank"></div>
-      <button class="dpad-btn" id="btnLeft">←</button>
-      <button class="dpad-btn" id="btnDown">↓</button>
-      <button class="dpad-btn" id="btnRight">→</button>
-    </div>
-  </div>
-  
+
   <div class="start-overlay active" id="startOverlay">
     <div class="logo">🌀</div>
     <h1>Labirinto</h1>
-    <p>Rola a bola até à estrela ★ Inclina o telemóvel ou usa as setas!</p>
+    <p>Rola a bola até à estrela ★ Inclina o telemóvel ou desliza no ecrã!</p>
     <button class="start-btn" id="startBtn">▶ COMEÇAR</button>
   </div>
   
@@ -163,27 +146,27 @@ function render() {
   canvas.height = mazeRows * cellSize;
   
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#3d6b3d';
+  ctx.fillStyle = '#ede9fe';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
+
   // Draw maze
-  ctx.strokeStyle = '#2a4a2a';
+  ctx.strokeStyle = '#6c5ce7';
   ctx.lineWidth = Math.max(2, cellSize * 0.06);
   ctx.lineCap = 'round';
-  
+
   for (let r = 0; r < mazeRows; r++) {
     for (let c = 0; c < mazeCols; c++) {
       const x = c * cellSize;
       const y = r * cellSize;
       const cell = maze[r][c];
-      
+
       // Floor
-      ctx.fillStyle = (r === ball.y && c === ball.x) ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+      ctx.fillStyle = (r === ball.y && c === ball.x) ? 'rgba(108,92,231,0.12)' : 'rgba(108,92,231,0.05)';
       ctx.fillRect(x+2, y+2, cellSize-4, cellSize-4);
-      
+
       // Walls
       ctx.beginPath();
-      ctx.strokeStyle = '#2a4a2a';
+      ctx.strokeStyle = '#6c5ce7';
       if (cell.n) { ctx.moveTo(x, y); ctx.lineTo(x+cellSize, y); }
       if (cell.s) { ctx.moveTo(x, y+cellSize); ctx.lineTo(x+cellSize, y+cellSize); }
       if (cell.w) { ctx.moveTo(x, y); ctx.lineTo(x, y+cellSize); }
@@ -325,12 +308,6 @@ document.addEventListener('keydown', function(e) {
     case 'ArrowRight': e.preventDefault(); moveBall(1, 0); break;
   }
 });
-
-// D-pad buttons
-document.getElementById('btnUp').addEventListener('click', function() { if(_gameStarted) moveBall(0,-1); });
-document.getElementById('btnDown').addEventListener('click', function() { if(_gameStarted) moveBall(0,1); });
-document.getElementById('btnLeft').addEventListener('click', function() { if(_gameStarted) moveBall(-1,0); });
-document.getElementById('btnRight').addEventListener('click', function() { if(_gameStarted) moveBall(1,0); });
 
 // Swipe
 let touchStart = null;
