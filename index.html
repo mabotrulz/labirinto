@@ -340,6 +340,21 @@ let tiltX = 0, tiltY = 0;
 let tiltInterval = null;
 let tiltBaseX = 0, tiltBaseY = 0;
 let tiltCalibrated = false;
+const FLIP_X = new URLSearchParams(location.search).has('flipx') ? -1 : 1;
+
+// Remap raw device tilt into SCREEN coordinates, so directions always match
+// what you see regardless of how the phone is rotated.
+function readTilt(e) {
+  const g = e.gamma || 0, b = e.beta || 0;
+  let a = (screen.orientation && typeof screen.orientation.angle === 'number')
+    ? screen.orientation.angle
+    : (typeof window.orientation === 'number' ? window.orientation : 0);
+  a = ((a % 360) + 360) % 360;
+  if (a === 90)  return {x: b,  y: -g};
+  if (a === 270) return {x: -b, y: g};
+  if (a === 180) return {x: -g, y: -b};
+  return {x: g, y: b};
+}
 
 function startTilt() {
   if (!_gameStarted) return;
@@ -353,13 +368,15 @@ function startTilt() {
 }
 
 function handleTilt(e) {
-  if (!tiltCalibrated && e.gamma !== null && e.beta !== null) {
-    tiltBaseX = e.gamma || 0;
-    tiltBaseY = e.beta || 90;
+  if (e.gamma === null || e.beta === null) return;
+  const t = readTilt(e);
+  if (!tiltCalibrated) {
+    tiltBaseX = t.x;
+    tiltBaseY = t.y;
     tiltCalibrated = true;
   }
-  tiltX = e.gamma || 0;
-  tiltY = e.beta || 90;
+  tiltX = t.x * FLIP_X;
+  tiltY = t.y;
 }
 
 function checkTilt() {
@@ -385,7 +402,13 @@ function startGame() {
   startTilt();
 }
 
-document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('click', function() {
+  // iOS 13+ requires a user-gesture permission request for motion sensors
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().catch(function() {});
+  }
+  startGame();
+});
 
 // Handle resize
 window.addEventListener('resize', function() {
